@@ -8,6 +8,12 @@
 #import "ClockView.h"
 #import "ClockFace.h"
 
+typedef enum {
+    kClockViewPointerAnimationNone,
+    kClockViewPointerAnimationDefault,
+    kClockViewPointerAnimationBounce,
+} ClockViewPointerAnimationType;
+
 @interface ClockView ()
 @property (strong, nonatomic) ClockFace *face;
 @property (strong, nonatomic) CAShapeLayer *secondsPointer;
@@ -41,7 +47,7 @@
     
     self.face = [[ClockFace alloc] init];
     self.face.contentsScale = [UIScreen mainScreen].scale;
-    self.face.lineWidth = 2.0;
+    self.face.lineWidth = 2;
     self.face.fillColor = self.fillColor.CGColor;
     self.face.strokeColor = self.strokeColor.CGColor;
     [self.layer addSublayer:self.face];
@@ -82,34 +88,36 @@
     self.hoursPointer.position = CGPointMake(self.bounds.size.width * 0.5, self.bounds.size.height * 0.5);
 }
 
-- (void)movePointer:(CALayer *)layer toAngle:(CGFloat)angle animated:(BOOL)animated {
-    if (animated) {
+- (void)movePointer:(CALayer *)layer toAngle:(CGFloat)angle animation:(ClockViewPointerAnimationType)animation {
+    if (animation == kClockViewPointerAnimationBounce) {
         [CATransaction begin];
         [CATransaction setAnimationDuration:0.1];
         [CATransaction setAnimationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseIn]];
         [CATransaction setCompletionBlock:^{
             [CATransaction begin];
             [CATransaction setAnimationDuration:0.05];
-            CATransform3D rotation = CATransform3DMakeRotation(-M_PI_2, 0, 0, 1);
-            layer.transform = CATransform3DRotate(rotation, angle, 0, 0, 1);
+            layer.transform = CATransform3DMakeRotation(angle - M_PI_2, 0, 0, 1);
             [CATransaction commit];
         }];
-        CATransform3D rotation = CATransform3DMakeRotation(-M_PI_2, 0, 0, 1);
-        layer.transform = CATransform3DRotate(rotation, angle + 0.03, 0, 0, 1);
+        layer.transform = CATransform3DMakeRotation(angle + 0.03 - M_PI_2, 0, 0, 1);
+        [CATransaction commit];
+    } else if (animation == kClockViewPointerAnimationDefault) {
+        [CATransaction begin];
+        [CATransaction setAnimationDuration:0.15];
+        layer.transform = CATransform3DMakeRotation(angle + 0.03 - M_PI_2, 0, 0, 1);
         [CATransaction commit];
     } else {
         [CATransaction begin];
-        [CATransaction setValue: (id) kCFBooleanTrue forKey: kCATransactionDisableActions];
-        CATransform3D rotation = CATransform3DMakeRotation(-M_PI_2, 0, 0, 1);
-        layer.transform = CATransform3DRotate(rotation, angle, 0, 0, 1);
+        [CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
+        layer.transform = CATransform3DMakeRotation(angle - M_PI_2, 0, 0, 1);
         [CATransaction commit];
     }
 }
 
 - (void)setHour:(NSInteger)hours minute:(NSInteger)minutes seconds:(NSInteger)seconds animated:(BOOL)animated {
-    [self movePointer:self.secondsPointer toAngle:M_PI * 2 / 60 * seconds animated:animated];
-    [self movePointer:self.minutesPointer toAngle:M_PI * 2 / 60 / 60 * (minutes * 60 + seconds) animated:NO];
-    [self movePointer:self.hoursPointer toAngle:M_PI * 2 / 12 / 60 * ((hours % 12) * 60 + minutes) animated:NO];
+    [self movePointer:self.secondsPointer toAngle:M_PI * 2 / 60 * seconds animation:animated ? kClockViewPointerAnimationBounce : kClockViewPointerAnimationNone];
+    [self movePointer:self.minutesPointer toAngle:M_PI * 2 / 60 / 60 * (minutes * 60 + seconds) animation:animated ? kClockViewPointerAnimationDefault : kClockViewPointerAnimationNone];
+    [self movePointer:self.hoursPointer toAngle:M_PI * 2 / 12 / 60 * ((hours % 12) * 60 + minutes) animation:animated ? kClockViewPointerAnimationDefault : kClockViewPointerAnimationNone];
 }
 
 - (void)setFillColor:(UIColor *)fillColor {
@@ -121,6 +129,7 @@
 - (void)setStrokeColor:(UIColor *)strokeColor {
     _strokeColor = strokeColor;
     self.face.strokeColor = strokeColor.CGColor;
+    [self.face setNeedsDisplay];
     self.secondsPointer.fillColor = strokeColor.CGColor;
     self.minutesPointer.fillColor = strokeColor.CGColor;
     self.hoursPointer.fillColor = strokeColor.CGColor;
